@@ -1,0 +1,75 @@
+modules:
+  - PPU:
+    port:
+      - PWD
+      - L2_I  # l2 cache port for instruction
+      - L2_D  # l2 cache port for data
+    subModule:
+      - WarpScheduler
+      - FETCH
+      - ICACHE
+      - DECODE
+      - IBUFFER
+      - DISPATCH
+      - REGISTER_FILE
+      - LD_ST
+      - MMA
+      - VEC_CORE
+      - WRITE_BACK
+      - SHARE_MEMORY
+      - DCACHE
+    connection:
+      - WarpScheduler.PWD : PPU.PWD
+      - WarpScheduler.FETCH : FETCH.WarpScheduler
+      - WarpScheduler.DECODE : DECODE.WarpScheduler
+      - WarpScheduler.DISPATCH : DISPATCH.WarpScheduler
+      - WarpScheduler.WRITE_BACK : WRITE_BACK.WarpScheduler
+      - FETCH.ICACHE : ICACHE.FETCH
+      - FETCH.DECODE : DECODE.FETCH
+      - ICACHE.L2 : PPU.L2_I
+      - DECODE.IBUFFER : IBUFFER.DECODE
+      - IBUFFER.DISPATCH : DISPATCH.IBUFFER
+      - DISPATCH.REGISTER_FILE : REGISTER_FILE.DISPATCH
+      - DISPATCH.LD_ST : LD_ST.DISPATCH
+      - DISPATCH.MMA : MMA.DISPATCH
+      - DISPATCH.VEC_CORE : VEC_CORE.DISPATCH
+      - REGISTER_FILE.WRITE_BACK : WRITE_BACK.REGISTER_FILE
+      - LD_ST.DCACHE : DCACHE.LD_ST
+      - LD_ST.SHARE_MEMORY : SHARE_MEMORY.LD_ST
+      - LD_ST.WRITE_BACK : WRITE_BACK.LD_ST
+      - MMA.WRITE_BACK : WRITE_BACK.MMA
+      - VEC_CORE.WRITE_BACK : WRITE_BACK.VEC_CORE
+      - DCACHE.L2 : PPU.L2_D
+
+  - Cache:
+    port:
+      - read_in
+          message: CacheReadRequest
+      - read_out
+          message: CacheReadResponse
+      - write_in
+          message: CacheWriteRequest
+      - write_out
+          message: CacheWriteResponse
+      - tag_walk_in
+          message: CacheTagWalkRequest
+      - tag_walk_out
+          message: CacheTagWalkResponse
+      - flush_in
+          message: CacheFlushRequest
+      - flush_out
+          message: CacheFlushResponse
+    subModule:
+      - L2_CACHE
+    connection:
+      - L2_CACHE.L2 : Cache.L2
+
+
+# connection entity between modules, the default format is "module1.port1 : module2.port2"
+messages:
+  - GPU.AXI : GPU.AXI
+  -
+
+# register in modules, espically for control register
+registers:
+  - 
