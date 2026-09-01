@@ -6,12 +6,12 @@ modules:
       - L2_D  # l2 cache port for data
     subModule:
       - WarpScheduler
-      - FETCH
-      - ICACHE
-      - DECODE
-      - IBUFFER
-      - DISPATCH
-      - REGISTER_FILE
+      - Fetch
+      - ICache
+      - Decode
+      - IBuffer
+      - Dispatch
+      - RegisterFile
       - LD_ST
       - MMA
       - VEC_CORE
@@ -20,20 +20,20 @@ modules:
       - DCACHE
     connection:
       - WarpScheduler.PWD : PPU.PWD
-      - WarpScheduler.FETCH : FETCH.WarpScheduler
-      - WarpScheduler.DECODE : DECODE.WarpScheduler
-      - WarpScheduler.DISPATCH : DISPATCH.WarpScheduler
+      - WarpScheduler.FETCH : Fetch.WarpScheduler
+      - WarpScheduler.DECODE : Decode.WarpScheduler
+      - WarpScheduler.DISPATCH : Dispatch.WarpScheduler
       - WarpScheduler.WRITE_BACK : WRITE_BACK.WarpScheduler
-      - FETCH.ICACHE : ICACHE.FETCH
-      - FETCH.DECODE : DECODE.FETCH
-      - ICACHE.L2 : PPU.L2_I
-      - DECODE.IBUFFER : IBUFFER.DECODE
-      - IBUFFER.DISPATCH : DISPATCH.IBUFFER
-      - DISPATCH.REGISTER_FILE : REGISTER_FILE.DISPATCH
-      - DISPATCH.LD_ST : LD_ST.DISPATCH
-      - DISPATCH.MMA : MMA.DISPATCH
-      - DISPATCH.VEC_CORE : VEC_CORE.DISPATCH
-      - REGISTER_FILE.WRITE_BACK : WRITE_BACK.REGISTER_FILE
+      - FETCH.ICACHE : ICache.FETCH
+      - FETCH.DECODE : Decode.FETCH
+      - ICache.L2 : PPU.L2_I
+      - Decode.IBuffer : IBuffer.DECODE
+      - IBuffer.DISPATCH : Dispatch.IBuffer
+      - Dispatch.RegisterFile : RegisterFile.DISPATCH
+      - Dispatch.LD_ST : LD_ST.DISPATCH
+      - Dispatch.MMA : MMA.DISPATCH
+      - Dispatch.VEC_CORE : VEC_CORE.DISPATCH
+      - RegisterFile.WRITE_BACK : WRITE_BACK.RegisterFile
       - LD_ST.DCACHE : DCACHE.LD_ST
       - LD_ST.SHARE_MEMORY : SHARE_MEMORY.LD_ST
       - LD_ST.WRITE_BACK : WRITE_BACK.LD_ST
@@ -41,7 +41,40 @@ modules:
       - VEC_CORE.WRITE_BACK : WRITE_BACK.VEC_CORE
       - DCACHE.L2 : PPU.L2_D
 
+
+# builtin modules, mostly used as parent module
+builtins:
+# template<
+#     size_t TagBits = 24,
+#     size_t IndexBits = 7,
+#     size_t OffsetBits = 5,  // 32 bytes offset
+#     CacheMappingPolicy MappingPolicy = CacheMappingPolicy::SetAssociative,
+#     CacheReplacementPolicy ReplacementPolicy = CacheReplacementPolicy::LRU,
+#     CacheWritePolicy WritePolicy = CacheWritePolicy::WriteBack,
+#     size_t Ways = 4, // For Direct: 1, SetAssoc: N, FullyAssoc: 0
+#     size_t LFBSize = 10 // l1 : 8~10, l2: about 20, l3/mc: dozens of
+# >
+# class Cache : ... { ... };
   - Cache:
+    parameters:
+      - TagBits       # default typename is size_t without default value
+      - IndexBits
+      - OffsetBits
+      - MappingPolicy
+          typename: CacheMappingPolicy
+          default: SetAssociative
+      - ReplacementPolicy
+          typename: CacheReplacementPolicy
+          default: LRU
+      - WritePolicy
+          typename: CacheWritePolicy
+          default: WriteBack
+      - Ways
+          typenmae: size_t
+          default: 4
+      - LFBSize
+          typename: size_t
+          default: 10
     port:
       - read_in
           message: CacheReadRequest
@@ -59,11 +92,34 @@ modules:
           message: CacheFlushRequest
       - flush_out
           message: CacheFlushResponse
-    subModule:
-      - L2_CACHE
-    connection:
-      - L2_CACHE.L2 : Cache.L2
 
+  - RegisterFile:
+    parameters:
+      - NumRegisters
+      - RegisterWidth
+    port:
+      - read_in
+          message: RegisterReadRequest
+      - read_out
+          message: RegisterReadResponse
+      - write_in
+          message: RegisterWriteRequest
+      - write_out
+          message: RegisterWriteResponse
+
+  - Memory:
+    parameters:
+      - MemorySize
+      - MemoryWidth
+    port:
+      - read_in
+          message: MemoryReadRequest
+      - read_out
+          message: MemoryReadResponse
+      - write_in
+          message: MemoryWriteRequest
+      - write_out
+          message: MemoryWriteResponse
 
 # connection entity between modules, the default format is "module1.port1 : module2.port2"
 messages:
@@ -73,3 +129,23 @@ messages:
 # register in modules, espically for control register
 registers:
   - 
+
+# helps enum, used in base module parameters
+# enum class CacheMappingPolicy { Direct, FullyAssociative, SetAssociative };
+# enum class CacheReplacementPolicy { LRU, FIFO, Random };
+# enum class CacheWritePolicy { WriteThrough, WriteBack, WriteAllocate, NoWriteAllocate };
+enums:
+  - CacheMappingPolicy:
+      - Direct
+      - FullyAssociative
+      - SetAssociative
+  - CacheReplacementPolicy
+      - LRU
+      - FIFO
+      - Random
+  - CacheWritePolicy
+      - WriteThrough
+      - WriteBack
+      - WriteAllocate
+      - NoWriteAllocate
+
