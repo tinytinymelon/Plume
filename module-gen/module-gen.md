@@ -36,3 +36,36 @@ Message(struct) will be auto-genreated based on 'connection' defined in module b
 All messages will be generated into 'interface_def.h' file
 
 ## 1.3. Register
+
+
+# 2. Detailed Unit
+
+## 2.1. LUT-GEMM Unit
+
+LUT Unit contains
+- LUT Dispatch
+- LUTGenArray : LUTGens in same array share value bus
+  - LUTGen x 4 per array
+- LUTAccArray : LUTAccs in same array share value bus
+  - LUTAcc x 4 per array
+
+Key configurations:
+- instruction tile size(MNK): we suppose the size is 16 * 8 * 16
+  - Reference CUDA Tensor Core size : 16 * 8 * 16
+
+Target execution expression as :
+
+```
+D = A * B + C
+```
+
+Matrix element type format should be [mx-format](https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf)
+
+Reference: https://zhuanlan.zhihu.com/p/1932073634538694566
+
+Here maps as"
+- w = B
+- x = A
+
+the LUT-GEMM requires two steps:
+1. 

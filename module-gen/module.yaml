@@ -1,151 +1,94 @@
 modules:
-  - PPU:
-    port:
-      - PWD
-      - L2_I  # l2 cache port for instruction
-      - L2_D  # l2 cache port for data
-    subModule:
-      - WarpScheduler
-      - Fetch
-      - ICache
-      - Decode
-      - IBuffer
-      - Dispatch
-      - RegisterFile
-      - LD_ST
-      - MMA
-      - VEC_CORE
-      - WRITE_BACK
-      - SHARE_MEMORY
-      - DCACHE
-    connection:
-      - WarpScheduler.PWD : PPU.PWD
-      - WarpScheduler.FETCH : Fetch.WarpScheduler
-      - WarpScheduler.DECODE : Decode.WarpScheduler
-      - WarpScheduler.DISPATCH : Dispatch.WarpScheduler
-      - WarpScheduler.WRITE_BACK : WRITE_BACK.WarpScheduler
-      - FETCH.ICACHE : ICache.FETCH
-      - FETCH.DECODE : Decode.FETCH
-      - ICache.L2 : PPU.L2_I
-      - Decode.IBuffer : IBuffer.DECODE
-      - IBuffer.DISPATCH : Dispatch.IBuffer
-      - Dispatch.RegisterFile : RegisterFile.DISPATCH
-      - Dispatch.LD_ST : LD_ST.DISPATCH
-      - Dispatch.MMA : MMA.DISPATCH
-      - Dispatch.VEC_CORE : VEC_CORE.DISPATCH
-      - RegisterFile.WRITE_BACK : WRITE_BACK.RegisterFile
-      - LD_ST.DCACHE : DCACHE.LD_ST
-      - LD_ST.SHARE_MEMORY : SHARE_MEMORY.LD_ST
-      - LD_ST.WRITE_BACK : WRITE_BACK.LD_ST
-      - MMA.WRITE_BACK : WRITE_BACK.MMA
-      - VEC_CORE.WRITE_BACK : WRITE_BACK.VEC_CORE
-      - DCACHE.L2 : PPU.L2_D
+  - LUT:
+      port:
+        - gen_in:
+            message: MLUTGenInput
+        - activation_in:
+            message: LUTActivationInput
+        - accumulation_in:
+            message: LUTAccumulationInput
+        - lut_out:
+            message: LUTGenOutput
+      subModules:
+        - LUTDispatch:
+            name: LUTDispatch
+        - LUTGen:
+            num: NUM_OF_GEN_PER_LUT
+        - LUTMem:
+            name: LUTMem
+        - LUTAcc:
+            num: NUM_OF_ACC_PER_LUT
+      csrRegisters:
+        - LUTDispatch
+        - LUTMem
+      connections:
+        - LUT.gen_in : LUTGen.gen_in
+        - LUTGen.gen_out : LUTMem.gen_in
+        - LUTMem.mem_out : LUTAcc.mem_in
+        - LUTAcc.acc_out : LUT.gen_out
 
+  - LUTGen:
+      port:
+        - gen_in
+        - gen_out
+
+  - LUTMem:
+      base: Memory
+      parameters:
+        - MemorySize: 32
+        - MemoryWidth: 10  
+
+  - LUTAcc:
+      port:
+        - mem_in
+        - acc_out
 
 # builtin modules, mostly used as parent module
 builtins:
-# template<
-#     size_t TagBits = 24,
-#     size_t IndexBits = 7,
-#     size_t OffsetBits = 5,  // 32 bytes offset
-#     CacheMappingPolicy MappingPolicy = CacheMappingPolicy::SetAssociative,
-#     CacheReplacementPolicy ReplacementPolicy = CacheReplacementPolicy::LRU,
-#     CacheWritePolicy WritePolicy = CacheWritePolicy::WriteBack,
-#     size_t Ways = 4, // For Direct: 1, SetAssoc: N, FullyAssoc: 0
-#     size_t LFBSize = 10 // l1 : 8~10, l2: about 20, l3/mc: dozens of
-# >
-# class Cache : ... { ... };
-  - Cache:
-    parameters:
-      - TagBits       # default typename is size_t without default value
-      - IndexBits
-      - OffsetBits
-      - MappingPolicy
-          typename: CacheMappingPolicy
-          default: SetAssociative
-      - ReplacementPolicy
-          typename: CacheReplacementPolicy
-          default: LRU
-      - WritePolicy
-          typename: CacheWritePolicy
-          default: WriteBack
-      - Ways
-          typenmae: size_t
-          default: 4
-      - LFBSize
-          typename: size_t
-          default: 10
-    port:
-      - read_in
-          message: CacheReadRequest
-      - read_out
-          message: CacheReadResponse
-      - write_in
-          message: CacheWriteRequest
-      - write_out
-          message: CacheWriteResponse
-      - tag_walk_in
-          message: CacheTagWalkRequest
-      - tag_walk_out
-          message: CacheTagWalkResponse
-      - flush_in
-          message: CacheFlushRequest
-      - flush_out
-          message: CacheFlushResponse
-
-  - RegisterFile:
-    parameters:
-      - NumRegisters
-      - RegisterWidth
-    port:
-      - read_in
-          message: RegisterReadRequest
-      - read_out
-          message: RegisterReadResponse
-      - write_in
-          message: RegisterWriteRequest
-      - write_out
-          message: RegisterWriteResponse
-
   - Memory:
     parameters:
-      - MemorySize
-      - MemoryWidth
+      - MemorySize: size_t
+      - MemoryWidth: size_t
+      - MemoryType: MemoryTypeEnum
     port:
-      - read_in
+      - read_in:
           message: MemoryReadRequest
-      - read_out
+      - read_out:
           message: MemoryReadResponse
-      - write_in
+      - write_in:
           message: MemoryWriteRequest
-      - write_out
+      - write_out:
           message: MemoryWriteResponse
 
-# connection entity between modules, the default format is "module1.port1 : module2.port2"
+# pre-defined connection message
 messages:
-  - GPU.AXI : GPU.AXI
-  -
+  - name: MemoryReadRequest
+    fields:
+      - address: size_t
+  - name: MemoryReadResponse
+    fields:
+      - data: uint8_t
+  - name: MemoryWriteRequest
+    fields:
+      - address: size_t
+      - data: uint8_t
+  - name: MemoryWriteResponse
+    fields:
+      - ack: bool
 
 # register in modules, espically for control register
 registers:
-  - 
+  csrRegisters:
+    - LUTDispatch
+    - LUTMem
 
 # helps enum, used in base module parameters
-# enum class CacheMappingPolicy { Direct, FullyAssociative, SetAssociative };
-# enum class CacheReplacementPolicy { LRU, FIFO, Random };
-# enum class CacheWritePolicy { WriteThrough, WriteBack, WriteAllocate, NoWriteAllocate };
 enums:
-  - CacheMappingPolicy:
-      - Direct
-      - FullyAssociative
-      - SetAssociative
-  - CacheReplacementPolicy
-      - LRU
-      - FIFO
-      - Random
-  - CacheWritePolicy
-      - WriteThrough
-      - WriteBack
-      - WriteAllocate
-      - NoWriteAllocate
+  - MemoryTypeEnum:
+      - None
+      - Paged
 
+# helps constant, used in base module parameters
+constants:
+  - NUM_OF_GEN_PER_LUT: 32  # 4 lines * 8 lut
+  - NUM_OF_ACC_PER_LUT: 32  # 4 lines * 8 lut

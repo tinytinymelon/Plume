@@ -1,0 +1,125 @@
+modules:
+  - LUT
+      port:
+        - gen_in
+            message: LUTInput
+      subModules:
+        - LUTGen
+        - LUTMem
+        - LUTAcc
+      connections:
+        - LUTGen.gen_out : LUTMem.gen_in
+        - LUTMem.mem_out : LUTAcc.mem_in
+        - LUTAcc.acc_out : LUT.gen_out
+
+
+# builtin modules, mostly used as parent module
+builtins:
+# template<
+#     size_t TagBits = 24,
+#     size_t IndexBits = 7,
+#     size_t OffsetBits = 5,  // 32 bytes offset
+#     CacheMappingPolicy MappingPolicy = CacheMappingPolicy::SetAssociative,
+#     CacheReplacementPolicy ReplacementPolicy = CacheReplacementPolicy::LRU,
+#     CacheWritePolicy WritePolicy = CacheWritePolicy::WriteBack,
+#     size_t Ways = 4, // For Direct: 1, SetAssoc: N, FullyAssoc: 0
+#     size_t LFBSize = 10 // l1 : 8~10, l2: about 20, l3/mc: dozens of
+# >
+# class Cache : ... { ... };
+  - Cache:
+    parameters:
+      - TagBits       # default typename is size_t without default value
+      - IndexBits
+      - OffsetBits
+      - MappingPolicy
+          typename: CacheMappingPolicy
+          default: SetAssociative
+      - ReplacementPolicy
+          typename: CacheReplacementPolicy
+          default: LRU
+      - WritePolicy
+          typename: CacheWritePolicy
+          default: WriteBack
+      - Ways
+          typenmae: size_t
+          default: 4
+      - LFBSize
+          typename: size_t
+          default: 10
+    port:
+      - read_in
+          message: CacheReadRequest
+      - read_out
+          message: CacheReadResponse
+      - write_in
+          message: CacheWriteRequest
+      - write_out
+          message: CacheWriteResponse
+      - tag_walk_in
+          message: CacheTagWalkRequest
+      - tag_walk_out
+          message: CacheTagWalkResponse
+      - flush_in
+          message: CacheFlushRequest
+      - flush_out
+          message: CacheFlushResponse
+
+  - RegisterFile:
+    parameters:
+      - NumRegisters
+      - RegisterWidth
+    port:
+      - read_in
+          message: RegisterReadRequest
+      - read_out
+          message: RegisterReadResponse
+      - write_in
+          message: RegisterWriteRequest
+      - write_out
+          message: RegisterWriteResponse
+
+  - Memory:
+    parameters:
+      - MemorySize
+      - MemoryWidth
+    port:
+      - read_in
+          message: MemoryReadRequest
+      - read_out
+          message: MemoryReadResponse
+      - write_in
+          message: MemoryWriteRequest
+      - write_out
+          message: MemoryWriteResponse
+
+# connection entity between modules, the default format is "module1.port1 : module2.port2"
+messages:
+  - GPU.AXI : GPU.AXI
+  -
+
+# register in modules, espically for control register
+registers:
+  - 
+
+# helps enum, used in base module parameters
+# enum class CacheMappingPolicy { Direct, FullyAssociative, SetAssociative };
+# enum class CacheReplacementPolicy { LRU, FIFO, Random };
+# enum class CacheWritePolicy { WriteThrough, WriteBack, WriteAllocate, NoWriteAllocate };
+enums:
+  - CacheMappingPolicy:
+      - Direct
+      - FullyAssociative
+      - SetAssociative
+  - CacheReplacementPolicy
+      - LRU
+      - FIFO
+      - Random
+  - CacheWritePolicy
+      - WriteThrough
+      - WriteBack
+      - WriteAllocate
+      - NoWriteAllocate
+
+# helps constant, used in base module parameters
+constants:
+  - NUM_OF_LUTS_PER_LUT: 32  # 4 lines * 8 lut
