@@ -1,12 +1,25 @@
 #/bin/python3
 import argparse
+from email import message
 import yaml
 import sys
 import os
 
+# global context for module generation
+# - dictionary of modules, messages, registers, enums, constants
+# - helps to quick find reference target objects by name 
+class GenContext:
+    def __init__(self, modules, messages, registers, enums, constants):
+        self.modules = modules
+        self.messages = messages
+        self.registers = registers
+        self.enums = enums
+        self.constants = constants
+
 # modules & built-ins
 class Module:
-    def __init__(self, name, base_clz, parameters, ports, csr_registers, connections):
+    def __init__(self, context, name, base_clz, parameters, ports, csr_registers, connections):
+        self.context = context
         self.name = name
         self.base_clz = base_clz
         self.parameters = parameters
@@ -14,26 +27,18 @@ class Module:
         self.csr_registers = csr_registers
         self.connections = connections
 
-    @staticmethod
-    def from_yaml(yaml_data):
-        name = yaml_data.get('name')
-        base_clz = yaml_data.get('base_clz')
-        parameters = yaml_data.get('parameters', [])
-        ports = yaml_data.get('ports', [])
-        csr_registers = yaml_data.get('registers', {}).get('csrRegisters', [])
-        connections = yaml_data.get('connections', [])
-        return Module(name, base_clz, parameters, ports, csr_registers, connections)
-
+    # input is one 
     @classmethod
     def from_yaml(cls, yaml_data):
         name = yaml_data.get('name')
-        base_clz = yaml_data.get('base_clz')
+        base_clz = yaml_data.get('base_clz', None)
         parameters = yaml_data.get('parameters', [])
-        ports = yaml_data.get('ports', [])
-        csr_registers = yaml_data.get('registers', {}).get('csrRegisters', [])
+        ports = [{pd.get('name'): {message: pd.get('message', None), 'kind': pd.get('kind', None)}} for pd in yaml_data.get('ports', [])]
+        csr_registers = yaml_data.get('csrRegisters', [])
         connections = yaml_data.get('connections', [])
         return cls(name, base_clz, parameters, ports, csr_registers, connections)
-    
+
+
 # messages
 class Message:
     def __init__(self, name, fields):
@@ -84,39 +89,55 @@ class Constant:
 
 
 class ModelGenerator:
-    def __init__(self, module):
-        self.module = module
+    def __init__(self, yaml_data):
+        self.yaml_data = yaml_data
 
     def generate(self):
-        # Placeholder for code generation logic
-        print(f"Generating code for module: {self.module.name}")
-        print(f"Base class: {self.module.base_clz}")
-        print(f"Parameters: {self.module.parameters}")
-        print(f"Ports: {self.module.ports}")
-        print(f"CSR Registers: {self.module.csr_registers}")
-        print(f"Connections: {self.module.connections}")
+        modules = [Module.from_yaml(m) for m in self.yaml_data.get('modules', [])]
+        messages = [Message.from_yaml(m) for m in self.yaml_data.get('messages', [])]
+        registers = [Register.from_yaml(r) for r in self.yaml_data.get('registers', {}).get('csrRegisters', [])]
+        enums = [Enum.from_yaml(e) for e in self.yaml_data.get('enums', [])]
+        constants = [Constant.from_yaml(c) for c in self.yaml_data.get('constants', [])]
+
+        return {
+            'modules': modules,
+            'messages': messages,
+            'registers': registers,
+            'enums': enums,
+            'constants': constants
+        }
 
 
-class ConfigWrapper:
-    def __init__(self, config_file):
-        self.config_file = config_file
-        self.configs = self.load_configs()
+class ArgumentsParser:
+    def __init__(self):
+        self.parser = argparse.ArgumentParser(description="Module Generator")
+        self.parser.add_argument('-i', '--input', default="module-gen/module.yaml", help="Input YAML file")
+        self.parser.add_argument('-o', '--output-dir', default="src/gen/include/module", help="Output Module Definition Path")
 
-    def load_configs(self):
-        with open(self.config_file, 'r') as f:
-            return yaml.safe_load(f)
+    def parse(self):
+        return self.parser.parse_args()
 
-def _main(input_file, output_file, configs):
+def _main():
+    args_parser = ArgumentsParser()
+    args = args_parser.parse()
+
+    input_file = args.input
+    output_dir = args.output_dir
+
+    # Load module from input YAML
     with open(input_file, 'r') as f:
-        data = yaml.safe_load(f)
+        module_yaml = yaml.safe_load(f)
+        print(module_yaml)
 
-    # Update the data based on configs
-    for key, value in configs.items():
-        if key in data:
-            data[key] = value
+# self-testing
+def self_testing():
+    print(os.getcwd())
+    module_yaml_file = 'module-gen/module.yaml'
+    with open(module_yaml_file, 'r') as f:
+        module_yaml = yaml.safe_load(f) 
 
-    with open(output_file, 'w') as f:
-        yaml.dump(data, f, default_flow_style=False)
+        print("Module YAML:")
+        print(module_yaml)
 
 
 if __name__ == "__main__":

@@ -1,64 +1,68 @@
 modules:
-  - LUT:
-      port:
-        - gen_in:
-            message: MLUTGenInput
-        - activation_in:
-            message: LUTActivationInput
-        - accumulation_in:
-            message: LUTAccumulationInput
-        - lut_out:
-            message: LUTGenOutput
-      subModules:
-        - LUTDispatch:
-            name: LUTDispatch
-        - LUTGen:
-            num: NUM_OF_GEN_PER_LUT
-        - LUTMem:
-            name: LUTMem
-        - LUTAcc:
-            num: NUM_OF_ACC_PER_LUT
-      csrRegisters:
-        - LUTDispatch
-        - LUTMem
-      connections:
-        - LUT.gen_in : LUTGen.gen_in
-        - LUTGen.gen_out : LUTMem.gen_in
-        - LUTMem.mem_out : LUTAcc.mem_in
-        - LUTAcc.acc_out : LUT.gen_out
+  - name: LUT
+    port:
+      - gen_in:
+        message: MLUTGenInput
+        kind: fifo
+      - activation_in:
+        message: LUTActivationInput
+        kind: signal
+      - accumulation_in:
+        message: LUTAccumulationInput
+      - lut_out:
+        message: LUTGenOutput
+    subModules:
+      - LUTDispatch:
+        name: LUTDispatch
+      - LUTGen:
+        num: NUM_OF_GEN_PER_LUT
+      - LUTMem:
+        name: LUTMem
+      - LUTAcc:
+        num: NUM_OF_ACC_PER_LUT
+    csrRegisters:
+      - LUTDispatch
+      - LUTMem
+    connections:
+      - LUT.gen_in : LUTGen.gen_in  # bi-directional connection, LUTGen.gen_in is the same as LUT.gen_in
+      - LUTGen.gen_out : LUTMem.gen_in
+      - LUTMem.mem_out : LUTAcc.mem_in
+      - LUTAcc.acc_out : LUT.gen_out
+      - source: LUT.activation_in  # direct connection
+        target: LUTAcc.activation_in
 
-  - LUTGen:
-      port:
-        - gen_in
-        - gen_out
+  - name: LUTGen
+    port:
+      - gen_in
+      - gen_out
 
-  - LUTMem:
-      base: Memory
-      parameters:
-        - MemorySize: 32
-        - MemoryWidth: 10  
+  - name: LUTMem
+    base: Memory
+    parameters:
+      - MemorySize: 32
+      - MemoryWidth: 10  
 
-  - LUTAcc:
-      port:
-        - mem_in
-        - acc_out
+  - name: LUTAcc
+    port:
+      - mem_in
+      - acc_out
 
 # builtin modules, mostly used as parent module
 builtins:
-  - Memory:
+  - name: Memory
     parameters:
       - MemorySize: size_t
       - MemoryWidth: size_t
       - MemoryType: MemoryTypeEnum
     port:
-      - read_in:
-          message: MemoryReadRequest
-      - read_out:
-          message: MemoryReadResponse
-      - write_in:
-          message: MemoryWriteRequest
-      - write_out:
-          message: MemoryWriteResponse
+      - name: read_in
+        message: MemoryReadRequest
+      - name: read_out
+        message: MemoryReadResponse
+      - name: write_in
+        message: MemoryWriteRequest
+      - name: write_out
+        message: MemoryWriteResponse
 
 # pre-defined connection message
 messages:
@@ -78,17 +82,21 @@ messages:
 
 # register in modules, espically for control register
 registers:
-  csrRegisters:
-    - LUTDispatch
-    - LUTMem
+  - name: csrRegisters
+    list:
+      - LUTDispatch
+      - LUTMem
 
 # helps enum, used in base module parameters
 enums:
-  - MemoryTypeEnum:
+  - name: MemoryTypeEnum
+    values:
       - None
       - Paged
 
 # helps constant, used in base module parameters
 constants:
-  - NUM_OF_GEN_PER_LUT: 32  # 4 lines * 8 lut
-  - NUM_OF_ACC_PER_LUT: 32  # 4 lines * 8 lut
+  - name: NUM_OF_GEN_PER_LUT
+    value: 32  # 4 lines * 8 lut
+  - name: NUM_OF_ACC_PER_LUT
+    value: 32  # 4 lines * 8 lut
