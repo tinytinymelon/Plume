@@ -5,114 +5,182 @@ import yaml
 import sys
 import os
 
-# global context for module generation
-# - dictionary of modules, messages, registers, enums, constants
-# - helps to quick find reference target objects by name 
-class GenContext:
-    def __init__(self, modules, messages, registers, enums, constants):
-        self.modules = modules
-        self.messages = messages
-        self.registers = registers
-        self.enums = enums
-        self.constants = constants
+class Port:
+    def __init__(self, port_yaml):
+        if isinstance(port_yaml, str):
+            self.name = port_yaml
+            self.kind = None
+            self.message = None
+        else:
+            self.name, value = next(iter(port_yaml.items()))
+            self.kind = value.get('kind', None)
+            self.message = value.get('message', None)
+
+class SubModule:
+    def __init__(self, sm_yaml):
+        if isinstance(sm_yaml, str):
+            self.name = sm_yaml
+            self.number = 1
+        else:
+            self.name, self.number = next(iter(sm_yaml.items()))
+
+class Connection:
+    def __init__(self, con_yaml):
+        if 'source' in con_yaml:
+            self.bi_directed = False
+            self.source = con_yaml.get('source', None)
+            self.target = con_yaml.get('target', None)
+        else:
+            self.bi_directed = True
+            self.source, self.target = next(iter(con_yaml.items()))
+            
 
 # modules & built-ins
 class Module:
-    def __init__(self, context, name, base_clz, parameters, ports, csr_registers, connections):
+    def __init__(self, context, yaml_data):
         self.context = context
-        self.name = name
-        self.base_clz = base_clz
-        self.parameters = parameters
-        self.ports = ports
-        self.csr_registers = csr_registers
-        self.connections = connections
+        self.name, value = next(iter(yaml_data.items()))
+        self.ports = []
+        for p in value.get('ports', []):
+            self.ports.append(Port(p))
 
-    # input is one 
-    @classmethod
-    def from_yaml(cls, yaml_data):
-        name = yaml_data.get('name')
-        base_clz = yaml_data.get('base_clz', None)
-        parameters = yaml_data.get('parameters', [])
-        ports = [{pd.get('name'): {message: pd.get('message', None), 'kind': pd.get('kind', None)}} for pd in yaml_data.get('ports', [])]
-        csr_registers = yaml_data.get('csrRegisters', [])
-        connections = yaml_data.get('connections', [])
-        return cls(name, base_clz, parameters, ports, csr_registers, connections)
+        self.sub_modules = []
+        for sm in value.get('subModules', []):
+            self.sub_modules.append(SubModule(sm))
 
+        self.csr_registers = value.get('csrRegiters', [])
 
+        self.connections = []
+        for con in value.get('connections', []):
+            self.connections.append(Connection(con))
+
+        if 'base' in value:
+            self.base = value.get('base')
+            self.parameters = value.get('parameters')
+        else:
+            self.base = None
+            self.parameters = []
+
+# built-in will generate C++ template header file, requires
+# to fill up detailed implementation
+# [TODO] find way to auto fill-up/merge solution for built-in
+#        template class
+class BuiltIn:
+    def __init__(self, context, yaml_data):
+        self.context = context
+        self.name, value = next(iter(yaml_data.items()))
+
+        self.parameters = []
+        if 'parameters' in value:
+            for pa in value.get('parameters', []):
+                pname, ptype = next(iter(pa.items()))
+                self.parameters.append({'pname': pname, 'ptype': ptype})
+
+        self.ports = []
+        for p in value.get('ports', []):
+            self.ports.append(Port(p))
+            
 # messages
 class Message:
-    def __init__(self, name, fields):
-        self.name = name
-        self.fields = fields
+    def __init__(self, context, yaml_data):
+        self.context = context
+        self.name, value = next(iter(yaml_data.items()))
 
-    @staticmethod
-    def from_yaml(yaml_data):
-        name = yaml_data.get('name')
-        fields = yaml_data.get('fields', [])
-        return Message(name, fields)
+        self.fields = []
+        for f in value.get('fields', []):
+            mname, mtype = next(iter(f.items()))
+            self.fields.append({'mname':mname, 'mtype':mtype})
 
 # registers: csr registers and other register
 class Register:
-    def __init__(self, name, fields):
-        self.name = name
-        self.fields = fields
-
-    @staticmethod
-    def from_yaml(yaml_data):
-        name = yaml_data.get('name')
-        fields = yaml_data.get('fields', [])
-        return Register(name, fields)
+    def __init__(self, context, yaml_data):
+        self.context = context
+        self.name, value = next(iter(yaml_data.items()))
+        self.address = value.get('address', 0x00000000)
 
 # help infos : enum
 class Enum:
-    def __init__(self, name, values):
-        self.name = name
-        self.values = values
-
-    @staticmethod
-    def from_yaml(yaml_data):
-        name = yaml_data.get('name')
-        values = yaml_data.get('values', [])
-        return Enum(name, values)
+    def __init__(self, context, yaml_data):
+        self.context = context
+        self.name, self.values = next(iter(yaml_data.items()))
 
 # help infos : constants
 class Constant:
-    def __init__(self, name, value):
-        self.name = name
-        self.value = value
-
-    @staticmethod
-    def from_yaml(yaml_data):
-        name = yaml_data.get('name')
-        value = yaml_data.get('value')
-        return Constant(name, value)
-
+    def __init__(self, context, yaml_data):
+        self.context = context
+        self.name, self.value = next(iter(yaml_data.items()))
 
 class ModelGenerator:
-    def __init__(self, yaml_data):
+    def __init__(self, yaml_data, config = {}):
         self.yaml_data = yaml_data
+        self.config = config
+
+        self.context = {}
+        self._collect()
+
+    def _collect(self):
+        self._do_collect('modules', Module);
+        self._do_collect('builtins', BuiltIn);
+        self._do_collect('messages', Message);
+        self._do_collect('registers', Register);
+        self._do_collect('enums', Enum);
+        self._do_collect('constants', Constant);
+
+    def _do_collect(self, entity_name, target_clz):
+        self.context[entity_name] = []
+        for d in self.yaml_data.get(entity_name, []):
+            self.context[entity_name].append(target_clz(self.context, d))
+
+    FILE_HEADER = """
+/* --------------------------------------------------------------------------------
+* AUTOMIATIC GENERATED BY MOUDLE-GEN, DO NOT DIRECTLY MODIFY IT
+* -------------------------------------------------------------------------------- */\n"""
 
     def generate(self):
-        modules = [Module.from_yaml(m) for m in self.yaml_data.get('modules', [])]
-        messages = [Message.from_yaml(m) for m in self.yaml_data.get('messages', [])]
-        registers = [Register.from_yaml(r) for r in self.yaml_data.get('registers', {}).get('csrRegisters', [])]
-        enums = [Enum.from_yaml(e) for e in self.yaml_data.get('enums', [])]
-        constants = [Constant.from_yaml(c) for c in self.yaml_data.get('constants', [])]
+        # init folder hierachy
+        output_dir = self.config['output_dir']
+        common_dir = os.path.join(output_dir, "common")
+        os.makedirs(common_dir, exist_ok=True) 
 
-        return {
-            'modules': modules,
-            'messages': messages,
-            'registers': registers,
-            'enums': enums,
-            'constants': constants
-        }
+        self._generateEnum(common_dir)
+        self._generateConstant(common_dir)
+
+    def _generateModule(self):
+        pass
+
+    def _generateBuiltin(self):
+        pass
+
+    def _generateMessage(self):
+        pass
+
+    def _generateRegister(self):
+        pass
+
+    def _generateEnum(self, base_dir):
+        hfile = os.path.join(base_dir, "enum.h")
+        with open(hfile, 'w', encoding='utf-8') as f:
+            f.write(ModelGenerator.FILE_HEADER)
+
+            for eu in self.context['enums']:
+                f.write(f"enum class {eu.name} {{ ")
+                f.write(", ".join(eu.values))
+                f.write(f" }};")
+
+    def _generateConstant(self, base_dir):
+        hfile = os.path.join(base_dir, "constant.h")
+        with open(hfile, 'w', encoding='utf-8') as f:
+            f.write(ModelGenerator.FILE_HEADER)
+
+            for c in self.context['constants']:
+                f.write(f"#define {c.name} {c.value};\n")
 
 
 class ArgumentsParser:
     def __init__(self):
         self.parser = argparse.ArgumentParser(description="Module Generator")
         self.parser.add_argument('-i', '--input', default="module-gen/module.yaml", help="Input YAML file")
-        self.parser.add_argument('-o', '--output-dir', default="src/gen/include/module", help="Output Module Definition Path")
+        self.parser.add_argument('-o', '--output-dir', default="src/gen/include", help="Output Module Definition Path")
 
     def parse(self):
         return self.parser.parse_args()
@@ -126,19 +194,13 @@ def _main():
 
     # Load module from input YAML
     with open(input_file, 'r') as f:
-        module_yaml = yaml.safe_load(f)
-        print(module_yaml)
+        model_yaml = yaml.safe_load(f)
 
-# self-testing
-def self_testing():
-    print(os.getcwd())
-    module_yaml_file = 'module-gen/module.yaml'
-    with open(module_yaml_file, 'r') as f:
-        module_yaml = yaml.safe_load(f) 
+        modelgen = ModelGenerator(model_yaml, {
+            'output_dir' : output_dir
+        })
 
-        print("Module YAML:")
-        print(module_yaml)
-
+        modelgen.generate()
 
 if __name__ == "__main__":
     _main()

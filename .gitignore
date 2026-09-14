@@ -70,3 +70,6 @@ Testing/
 
 # third-party libraries
 third-party/lib
+
+# auto generated files
+src/gen/

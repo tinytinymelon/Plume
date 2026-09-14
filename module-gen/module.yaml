@@ -1,102 +1,97 @@
 modules:
-  - name: LUT
-    port:
-      - gen_in:
-        message: MLUTGenInput
-        kind: fifo
-      - activation_in:
-        message: LUTActivationInput
-        kind: signal
-      - accumulation_in:
-        message: LUTAccumulationInput
-      - lut_out:
-        message: LUTGenOutput
-    subModules:
-      - LUTDispatch:
-        name: LUTDispatch
-      - LUTGen:
-        num: NUM_OF_GEN_PER_LUT
-      - LUTMem:
-        name: LUTMem
-      - LUTAcc:
-        num: NUM_OF_ACC_PER_LUT
-    csrRegisters:
-      - LUTDispatch
-      - LUTMem
-    connections:
-      - LUT.gen_in : LUTGen.gen_in  # bi-directional connection, LUTGen.gen_in is the same as LUT.gen_in
-      - LUTGen.gen_out : LUTMem.gen_in
-      - LUTMem.mem_out : LUTAcc.mem_in
-      - LUTAcc.acc_out : LUT.gen_out
-      - source: LUT.activation_in  # direct connection
-        target: LUTAcc.activation_in
+  - LUT:
+      ports:
+        - gen_in:
+            message: MLUTGenInput
+            kind: fifo
+        - activation_in:
+            message: LUTActivationInput
+            kind: signal
+        - accumulation_in:
+            message: LUTAccumulationInput
+        - lut_out:
+            message: LUTGenOutput
+      subModules:
+        - LUTDispatch
+        - LUTGen: NUM_OF_GEN_PER_LUT
+        - LUTMem
+        - LUTAcc: NUM_OF_ACC_PER_LUT
+      csrRegisters:
+        - LUTDispatch
+        - LUTMem
+      connections:
+        - LUT.gen_in : LUTGen.gen_in  # bi-directional connection, LUTGen.gen_in is the same as LUT.gen_in
+        - LUTGen.gen_out : LUTMem.gen_in
+        - LUTMem.mem_out : LUTAcc.mem_in
+        - LUTAcc.acc_out : LUT.gen_out
+        - source: LUT.activation_in  # single direct connection
+          target: LUTAcc.activation_in
 
-  - name: LUTGen
-    port:
+  - LUTGen:
+      ports:
       - gen_in
       - gen_out
 
-  - name: LUTMem
-    base: Memory
-    parameters:
+  - LUTMem:
+      base: Memory
+      parameters:
       - MemorySize: 32
       - MemoryWidth: 10  
 
-  - name: LUTAcc
-    port:
+  - LUTAcc:
+      ports:
       - mem_in
       - acc_out
 
-# builtin modules, mostly used as parent module
+# builtin modules, mostly used as parent module, supported keys
+# - parameters : mapping to C++ template types
+# - port : same as Module
+# [Note] one built-in should be one single non-submobulde module,
+#        in such case, keys subModules and connection is not supported
 builtins:
-  - name: Memory
-    parameters:
-      - MemorySize: size_t
-      - MemoryWidth: size_t
-      - MemoryType: MemoryTypeEnum
-    port:
-      - name: read_in
-        message: MemoryReadRequest
-      - name: read_out
-        message: MemoryReadResponse
-      - name: write_in
-        message: MemoryWriteRequest
-      - name: write_out
-        message: MemoryWriteResponse
+  - Memory:
+      parameters:
+        - MemorySize: size_t
+        - MemoryWidth: size_t
+        - MemoryType: MemoryTypeEnum
+      port:
+        - read_in:
+            message: MemoryReadRequest
+        - read_out:
+            message: MemoryReadResponse
+        - write_in:
+            message: MemoryWriteRequest
+        - write_out:
+            message: MemoryWriteResponse
 
 # pre-defined connection message
 messages:
-  - name: MemoryReadRequest
-    fields:
-      - address: size_t
-  - name: MemoryReadResponse
-    fields:
-      - data: uint8_t
-  - name: MemoryWriteRequest
-    fields:
-      - address: size_t
-      - data: uint8_t
-  - name: MemoryWriteResponse
-    fields:
-      - ack: bool
+  - MemoryReadRequest:
+      fields:
+        - address: size_t
+  - MemoryReadResponse: 
+      fields:
+        - data: uint8_t
+  - MemoryWriteRequest: 
+      fields:
+        - address: size_t
+        - data: uint8_t
+  - MemoryWriteResponse: 
+      fields:
+        - ack: bool
 
 # register in modules, espically for control register
 registers:
-  - name: csrRegisters
-    list:
-      - LUTDispatch
-      - LUTMem
+  - LUTDispatch:
+      address: 0x00000003
 
 # helps enum, used in base module parameters
 enums:
-  - name: MemoryTypeEnum
-    values:
-      - None
-      - Paged
+  - MemoryTypeEnum:
+    - None
+    - Paged
 
 # helps constant, used in base module parameters
 constants:
-  - name: NUM_OF_GEN_PER_LUT
-    value: 32  # 4 lines * 8 lut
-  - name: NUM_OF_ACC_PER_LUT
-    value: 32  # 4 lines * 8 lut
+  - NUM_OF_GEN_PER_LUT: 32  # 4 lines * 8 lut
+  - NUM_OF_ACC_PER_LUT: 32  # 4 lines * 8 lut
