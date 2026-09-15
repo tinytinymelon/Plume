@@ -54,6 +54,7 @@ builtins:
         - MemorySize: size_t
         - MemoryWidth: size_t
         - MemoryType: MemoryTypeEnum
+        - TestType: typename
       port:
         - read_in:
             message: MemoryReadRequest
